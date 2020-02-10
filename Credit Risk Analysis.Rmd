@@ -1,0 +1,852 @@
+---
+title: "Lending Club"
+author: "Navroze Mishra"
+date: "05/07/2019"
+output:
+  word_document:
+    toc: yes
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+
+```{r, echo=FALSE,results=FALSE, message=FALSE, warning=FALSE}
+require(data.table)
+loan <- fread("loan.csv") 
+loan <- data.frame(loan)
+loan <- loan[,c("loan_amnt", "term", "int_rate", "grade", "emp_length","home_ownership", "annual_inc", "verification_status", "issue_d", "loan_status", "pymnt_plan", "purpose", "addr_state", "dti", "delinq_2yrs", "earliest_cr_line", "inq_last_6mths", "mths_since_last_delinq", "mths_since_last_record", "open_acc", "pub_rec", "revol_bal", "revol_util", "total_acc")]
+
+```
+
+# Single Variable Data Exploration and Cleaning
+
+
+## Loan Amount
+
+Loan amount is the amount of loan that has been extended to the borrower. In our dataset, the amount ranged from $500 - $35,000 and the maximum number of loans were borrowed in the $7,500-$10,000 range.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+summary(loan$loan_amnt)
+hist(loan$loan_amnt, main = "Distribution of Loan Amount", xlab = "Loan Amount", col = "Yellow")
+loan_amnt_bin_func <- function(x){
+  if(x <= 5000){
+    return("Below 5K")
+  }
+  else if (x > 5000 & x <= 10000 ){
+    return ("5K - 10K")
+  }
+  else if (x > 10000 & x <= 15000){
+    return ("10K - 15K")
+  }
+  else if (x > 15000 & x <= 20000){
+    return ("15K - 20K")
+  }
+  else if (x > 20000 & x <= 25000){
+    return ("20K - 25K")
+  }
+  else if (x > 25000 & x <= 30000){
+    return ("25K - 30K")
+  }
+  else{
+    return("Above 30K")
+  }
+} 
+loan$loan_amnt_bin <- sapply(loan$loan_amnt, loan_amnt_bin_func)
+x <- table(loan$loan_amnt_bin)/length(loan$loan_amnt_bin)
+y <- as.data.frame(x)
+barplot(x, main = "Distribution of Loan Amount",  col = "tomato", las = 2, ylim = c(0,.30), ylab = "Frequency (%)" )
+```
+
+
+## Term
+
+Term is the period for which the loan is extended and is measured by the number of payments on the loan. Values are in months which are either 36 or 60. It was seen that most of the loans, 70%, were taken on 36 month payment plan. 
+
+```{r, echo=FALSE,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan$term <- as.factor(gsub(" months", "", loan$term))
+table(loan$term)
+x <- round((table(loan$term) / length(loan$term)),2)
+barplot(x, main = "Frequency of Loan Terms", xlab = "Loan Term", ylab = "Frequency", col = "pink", ylim = c(0,.8))
+```
+
+
+## Interest Rate
+
+Interest Rate is the rate of interest on the loan. As can be seen from the histogram, it is somewhat right skewed and even though the interest rate ranges from 5.32-28.9, a big part of the loans were extended for an interest rate up to 20%, with the average rate being 13.25%.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan$int_rate <- as.numeric(gsub('\\%', '', loan$int_rate))
+summary(loan$int_rate)
+hist(loan$int_rate, main = "Distribution of Interest Rate", xlab = "Interest Rate", col = "light green", xlim = c(5,30))
+int_bin_func <- function(x){
+  if(x > 5 & x<= 10){
+    return("5% - 10%")
+  }
+  else if (x > 10 & x<= 15 ){
+    return ("10% - 15%")
+  }
+  else if (x > 15 & x<= 20){
+    return ("15% - 20%")
+  }
+  else if (x > 20 & x<= 25){
+    return ("20% - 25%")
+  }
+  else{
+    return("Abv 25%")
+  }
+}
+loan$int_rate_bin <- sapply(loan$int_rate, int_bin_func)
+x <- table(loan$int_rate_bin)/length(loan$int_rate_bin)
+barplot(x, main = "Interest Rate Distribution", ylab = "Frequency (%)", las = 2, col = "blue")
+```
+
+
+## Grade
+
+Grade field is the grade assigned to each loan by Lending Club. It reflects how likely the loan is to be paid off and is determined based on the creditworthiness of the borrower. The grades in the dataset range from A-G, B and C being the most assigned and very few G grade loans extended.
+
+```{r, echo=FALSE,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+table(loan$grade)
+x <-table(loan$grade) / length(loan$grade)
+barplot(x, main = "Frequency of Loan Grade", xlab = "Loan Grade", ylab = "Frequency", col = "tomato", ylim = c(0,.4))
+```
+
+
+## Employment Length
+
+Employment length is the length in years for which the borrower has been employed. Possible values are between 0 and 10 where 0 being less than one year and 10 being ten or more years. N/a is the value assigned to the borrower who has never been in employment so far. The graph clearly shows that a vast majority of the loans have been extended to people with 10 or more years in employment.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+table(loan$emp_length)
+x <-table(loan$emp_length) / length(loan$emp_length)
+barplot(x, main = "Frequency of Employment Length", ylab = "Frequency", col = "pink", ylim = c(0,.4), las = 2)
+```
+
+
+## Home Ownership
+
+The home ownership status provided by the borrower during registration. Our values include RENT, OWN, MORTGAGE, OTHER, however, as is evident from the visualization, none of the applicants selected ‘Other’. Also, close to 50% of the loans were extended to people having an exiting mortgage and those owning a house formed the lowest part, being 10%.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan$home_ownership[loan$home_ownership == "ANY"] <- "MORTGAGE"
+loan <- loan[loan$home_ownership != "NONE",]
+loan <- loan[loan$home_ownership != "OTHER",]
+loan$home_ownership <- as.factor(as.character(loan$home_ownership))
+table(loan$home_ownership)
+x <-table(loan$home_ownership) / length(loan$home_ownership)
+barplot(x, main = "Frequency of Home Ownership", ylab = "Frequency", col = "pink", ylim = c(0,.6))
+```
+
+
+## Annual Income
+
+The annual income is what was provided by the borrower during registration. In our dataset, the annual income ranges from anywhere between $0- $150,000 and as can be seen in the plot, it is somewhat right skewed with the majority of borrowers making within the $100,000 range, the average being around $67,000. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+summary(loan$annual_inc)
+loan$annual_inc[is.na(loan$annual_inc)] <- median(loan$annual_inc, na.rm = TRUE)
+loan$annual_inc[loan$annual_inc > 150000] <- median(loan$annual_inc, na.rm = TRUE)
+summary(loan$annual_inc)
+hist(loan$annual_inc, main = "Distribution of Annual Income", xlab = "Annual Income", col = "light blue", breaks = 20)
+```
+
+## Verification Status
+
+Indicates whether the co-borrowers' joint income has been verified by Lending Club. It is classified into ‘Verified’, ‘Not verified’ or ‘Source verified’ and from the frequency plot, it can be seen that the cases belonging to each category are uniformly distributed with 37% being source verified and 30% not verified.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+table(loan$verification_status)
+x <- round((table(loan$verification_status)/length(loan$verification_status)),2)
+barplot(x, main = "Frequency of Verification Status", ylab = "Frequency", col = "purple", ylim = c(0,.6))
+```
+
+## Issue Year
+
+Lending Club started in 2007 started issuing 596 loans. As the year’s progress, Lending Club increased the number of loans per year by thousands. During the year of 2012 there was a huge number of loans issued of 53,279 loans compare to last year of 2015 issued 421,094 loans. The graph displays as the years progressed which is shown in the graph Lending Club has increased the number of loans over the years. At the year of 2012, Lending Club commenced to issue more loans all the way up to 2015. The graph displays there is an increase trend of issue loans for this year. 
+
+
+
+
+
+## Loan Status
+
+The term loan status means the current status of the borrower. There are 8 different categories a borrower can be placed under which are the following: charged off, current, default, fully paid, in grace period, issued, last (16-30 days), late (31-120days). The largest category borrowers are placed in our current dataset, second largest which is 207,573 loans and third largest is charged off. Charged off status implies that loans for which are no longer a reasonable expectation of further payments. Generally, Charge Off occurs no later than 30 days after the Default status is reached.
+
+As you can see in the diagram labeled “Frequency, distribution is slight skewed to the right. 70 percent of borrowers which is majority are labeled as current status. 30 percent of borrowers are labeled as fully paid under loan status. The second top category which means loan has been fully repaid, either at the expiration of the 3 or 5-year term as a result of prepayment. 10 percent of borrowers are labeled as charged off which implies that the borrower who are labeled as status, means that no longer a reasonable expectation of further payments according to (Lending club website.)
+
+For the graph titled, “Frequency of Bad Loans,” we found out that the frequency of a borrower getting a bad loan is 0.1, and a good one is .9.   
+
+For graph titled, “Loan Status,” visualized the frequency of a borrower being labeled as current, bad or good to see if he or she will default in their loans. The chart displays 70 percent of borrowers are labeled as current under loan status. 30 percent of borrowers are labeled as good under loan status, and 10 percent of borrowers are labeled as bad.  
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan <- loan[loan$loan_status %in% c("Charged Off","Current", "Default", "Fully Paid", "In Grace Period", "Issued", "Late (16-30 days)", "Late (31-120 days)"),]
+table(loan$loan_status)
+x <- round((table(loan$loan_status)/length(loan$loan_status)),2)
+barplot(x, main = "Frequency of Loan Status", ylab = "Frequency", col = "tomato", ylim = c(0,.8))
+loan$bad <- ifelse((loan$loan_status == "Default" | loan$loan_status == "Late (31-120 days)" | loan$loan_status == "Charged Off" | loan$loan_status == "In Grace Period" | loan$loan_status == "Late (16-30 days)"), 1, 0)
+x <- round((table(loan$bad)/length(loan$bad)),2)
+barplot(x, main = "Frequency of Bad Loans", ylab = "Frequency", col = "green", ylim = c(0,1))
+good_status = c("Fully Paid",
+               "Does not meet the credit policy. Status:Fully Paid")
+on_going_status = c("Current",
+                   "Issued")
+loan$status_2 = ifelse(loan$loan_status %in% good_status,"Good",
+                               ifelse(loan$loan_status %in% on_going_status,"Current","Bad"))
+loan$status_2 = factor(loan$status_2)
+x <- round((table(loan$status_2)/length(loan$status_2)),2)
+barplot(x, main = "Frequency of Loans Status", ylab = "Frequency", col = "orange", ylim = c(0,1))
+```
+
+
+## Purpose
+
+There are four categories that a borrower fills out in application describes purpose why he or she wants to borrow a loan the following are: credit card, debt consolidation, home improvement, and others. The highest category that a borrower asks to borrow a loan is debt consolidation .60 percent of people borrow money for debt consolidation.  23 percent of borrowers seek for a loan from Lending Club for credit card. 25 percent of borrowers seek loan for other type of reasons from Lending Club.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan$purpose[!loan$purpose %in% c("credit_card", "debt_consolidation", "home_improvement")] <- "other"
+table(loan$purpose)
+x <- round((table(loan$purpose)/length(loan$purpose)),2)
+barplot(x, main = "Frequency of Purpose", ylab = "Frequency", col = "light green", ylim = c(0,.8))
+```
+
+
+
+
+## dti
+
+Debt to income ratio, which is the percentage of a consumer’s monthly gross income that goes toward paying debts (excluding household debt).  Lending Club uses DTI as part of its “risk modifiers” that help to calculate a “loan grade” ranging from A to G. The loan grade is mostly based on a consumer’s FICO scores, but is modified to take into accounts the DTI and the loan amounts. The distribution of debt to Income seems to be normally distributed bell shape curve.   Large number of borrowers in Lending Club DTI score majority falls from 10 to 23.96 even though the maximum is 39.99.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan <- loan[loan$dti < 40,]
+summary(loan$dti)
+hist(loan$dti, main = "Distribution of Debt-to-Income Ratio", xlab = "dti", col = "light pink", breaks = 20)
+```
+
+
+## Deliquency in 2 years
+
+Delinquency in 2 years means that the borrower has been due for a payment more than 30 days in the past two years.  The frequency of the bar graph shows number of borrowers of loan by delinquent in two years whether they are delinquent or not. We can infer that 81 percent of borrowers are not delinquent in the last 2 years and 19 percent of the borrowers have been delinquent in the last 2 years. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan$deliquent <- ifelse(loan$delinq_2yrs == 0, 0, 1)
+table(loan$deliquent)
+x <- sort(table(loan$deliquent)/length(loan$deliquent))
+barplot(x, main = "Frequency of Loan by deliquent", ylab = "Frequency", col = "tomato")
+```
+
+## Earliest Credit Line
+
+Earliest credit line is the month the borrower's earliest reported credit line was opened. And from the frequency histogram, we see a large number of people fall in the category with 10-15 month of credit age. Even though the maximum credit age is 71, around 90% of total people has first credit line opened within 30 months.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+x <- as.numeric(substr(loan$issue_d, (nchar(loan$issue_d) - 3), nchar(loan$issue_d)))
+y <- as.numeric(substr(loan$earliest_cr_line, (nchar(loan$earliest_cr_line) - 3), nchar(loan$earliest_cr_line)))
+z <- x - y
+summary(z)
+loan$credit_line <- z
+hist(z, main = "Credit Age Distribution", xlab = "Credit Age(in years)", col = "pink")
+```
+
+
+## Inquiry last 6 months
+
+The frequency bar shows the number of inquiries in past 6 months (excluding auto and mortgage inquiries). Number of people who have 1 loan inquiry accounts for 45% of total people, and almost 55% of total observations have 0 loan inquiry in the past 6 months.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan$inquiry <- ifelse(loan$inq_last_6mths == 0, 0, 1)
+table(loan$inquiry)
+x <- sort(table(loan$inquiry)/ length(loan$inquiry))
+barplot(x, main = "Number of Loan Inquires", xlab = "Loan Inquiry", ylab = "Frequency", col = "Violet", ylim = c(0,.6))
+
+```
+
+
+## Open Accounts
+
+Open accounts measure the number of open credit lines in the borrower's credit file. The distribution is approximately normal with a mean of 11.52 and standard deviation of 5.16, but it is highly right-skewed as well. In other words, number of open credit lines beyond 30 are considered as outliers which occur rarely. 
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan <- loan[loan$open_acc < 40,]
+summary(loan$open_acc)
+hist(loan$open_acc, main = "Open Account Distribution", xlab = "Number of Open Accounts", col = "light blue")
+```
+
+
+## Revolving Balance
+
+Revolving balance is the total credit revolving balance of a person. The distribution is highly right skewed which means many outliers occur in the data. The average for revolving balance is 15520, and more than half of the observations have less than 20,000 of total credits. The range of revolving range is from 0 to 99980.
+
+```{r, echo = F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan <- loan[loan$revol_bal < 100000,]
+summary(loan$revol_bal)
+hist(loan$revol_bal, main = "Revolving Balance Distribution", xlab = "Revolving Balance", col = "light blue")
+
+```
+
+
+## Revolving Utilization
+
+Revolving utilization stands for the revolving line utilization rate, or the amount of credit the borrower is using relative to all available revolving credit. The distribution is highly right-skewed, and the frequency decreases as the revolving utilization decreases after it reaches the peak. The range of revolving utilization is from 0 to 100 and the mean is 54.82.
+
+```{r, echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan <- loan[loan$revol_util <= 100,]
+loan <- loan[!is.na(loan$revol_util),]
+summary(loan$revol_util)
+hist(loan$revol_bal, main = "Revolving Utilization Distribution", xlab = "Revolving Utilization", col = "tomato")
+
+```
+
+
+## Total Account
+
+Total account is the total number of credit lines currently in the borrower's credit file. The distribution looks normal with a little bit right skewness. The most frequently total account is between 15 and 25 and the total range is from 2 to 100. The average total account is about 25.
+
+```{r, echo = F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan <- loan[loan$total_acc <= 100,]
+summary(loan$total_acc)
+hist(loan$total_acc, main = "Total Account Distribution", xlab = "Total Account", col = "yellow")
+
+```
+
+
+# Exploring Relationship (Multiple Variable)
+
+## Loan Status vs Loan Amount
+
+```{r, echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+require(ggplot2)
+box_status <- ggplot(loan, aes(loan_status, loan_amnt))
+box_status + geom_boxplot(aes(fill = loan_status),outlier.colour="red", outlier.shape=8, outlier.size=4 ) +theme(axis.text.x = element_blank(), panel.background = element_blank(), axis.line = element_line(colour = "black")) +labs(list(x = "Status",y = "Amount")) 
+```
+
+
+## Loan Amount vs Bad Loan
+
+```{r, echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+require(ggplot2)
+loan$bad <- as.factor(loan$bad)
+ggplot(loan, aes(bad, loan_amnt, fill = bad)) + geom_boxplot(outlier.colour="red", outlier.shape=8,
+                outlier.size=4)+ theme_classic() +labs(list(x = "Status",y = " Loan Amount")) 
+
+```
+
+
+## Loan Term vs Loan Amount
+
+```{r,echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9 }
+ggplot(loan, aes(term,loan_amnt)) + geom_boxplot(aes(fill = term), outlier.colour="red", outlier.shape=8,outlier.size=4) + labs(x = "Term",y = "Loan Amount") + theme_classic() + labs(list(x = "Term",y = " Loan Amount")) 
+```
+
+
+## Interest Rate vs Grade
+
+```{r, echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+ggplot(loan, aes(grade,int_rate)) + geom_boxplot(aes(fill = grade),outlier.colour="red", outlier.shape=8,outlier.size=2) +labs(x = "Grade", y = "Interest rate") + theme_classic() + labs(list(x = "Grade",y = "Interest Rate")) 
+```
+
+
+## Annual Oncome vs Grade
+
+```{r, echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+ggplot(loan, aes(x = grade, y = annual_inc, fill = grade)) + geom_boxplot(outlier.colour="red", outlier.shape=8,outlier.size=2)+ theme_classic() + labs(list(x = "Grade",y = "Annual Income")) 
+```
+
+
+## Annual Income vs Interest
+
+```{r, echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+ggplot(loan, aes(x = int_rate_bin, y = annual_inc, fill = int_rate_bin)) + geom_boxplot(outlier.colour="red", outlier.shape=8,outlier.size=2)+ theme_classic() + labs(list(x = "Interest Rate",y = "Annual Income")) 
+
+```
+
+
+## Verification Station vs Interest
+
+```{r, echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+ggplot(loan, aes(x = verification_status, y = int_rate, fill = verification_status)) + geom_boxplot(outlier.colour="red", outlier.shape=8,outlier.size=2)+ theme_classic() + labs(list(x = "Verification Status",y = "Interest Rate"))
+```
+
+
+## Home Ownership vs Interest Rate
+
+```{r, echo=F, message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+ggplot(loan, aes(x = home_ownership, y = int_rate, fill = home_ownership)) + geom_boxplot(outlier.colour="red", outlier.shape=8,outlier.size=2)+ theme_classic() + labs(list(x = "Home Ownership",y = "Interest Rate"))
+
+```
+
+# Modeling
+
+
+
+
+## Decision Tree
+
+```{r, echo=FALSE ,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+library(rpart)
+library(rpart.plot)
+library(ROCR)
+loan <- read.csv("balanced_data.csv")
+loan_decision <- loan
+loan_decision$deliquent <- as.factor(loan_decision$deliquent)
+loan_decision$inquiry <- as.factor(loan_decision$inquiry)
+loan_decision$term <- as.factor(loan_decision$term)
+set.seed(1)
+train_decision <- createDataPartition(loan_decision$bad, p = .7, list = FALSE)
+training_decision <- loan_decision[train_decision,]
+validation_decision <- loan_decision[-train_decision,]
+rm(train_decision)
+tree.fit <- rpart(bad ~ ., data = training_decision, method = "class", control = rpart.control(cp = 0.001))
+min_cp <- tree.fit$cptable[which.min(tree.fit$cptable[,"xerror"]), "CP"]
+pruned_tree <- prune(tree.fit, cp= min_cp)
+prp(pruned_tree,extra = 4)
+predict_decision <- predict(pruned_tree, newdata = validation_decision)
+predict_decision <- predict_decision[,"1"]
+## Predicton at 20% cutoff
+pred_class_20 <- ifelse(predict_decision > 0.2, 1, 0)
+pred_class_20 <- factor(pred_class_20, levels = c(0, 1))
+validation_decision$bad <- factor(validation_decision$bad, levels = c(0, 1))
+confusionMatrix(pred_class_20, validation_decision$bad, positive = "1", dnn = c("Prediction", "Actual"))
+## Predicton at 25% cutoff
+pred_class_25 <- ifelse(predict_decision > 0.25, 1, 0)
+pred_class_25 <- factor(pred_class_25, levels = c(0, 1))
+confusionMatrix(pred_class_25, validation_decision$bad, positive = "1", dnn = c("Prediction", "Actual"))
+## Predicton at 30% cutoff
+pred_class_30 <- ifelse(predict_decision > 0.30, 1, 0)
+pred_class_30 <- factor(pred_class_30, levels = c(0, 1))
+confusionMatrix(pred_class_30, validation_decision$bad, positive = "1", dnn = c("Prediction", "Actual"))
+pred_knn <- prediction(predict_decision, validation_decision$bad)
+perf_knn <- performance(pred_knn, "tpr", "fpr")
+plot(perf_knn,col="blue", main = "ROC Curve for Decision Tree")
+#points(c(0,1),c(0,1),type = "l", add = TRUE)
+perf_knn <- performance(pred_knn, "auc")
+auc_decision <- round(perf_knn@y.values[[1]],5)
+print(paste("Area Under Curve for decision tree is : ", auc_decision ))
+```
+
+
+## Bagging 
+```{r, echo=FALSE ,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+library(randomForest)
+loan_bagging <- loan[ , c("loan_amnt", "term", "int_rate", "home_ownership", "annual_inc", 
+                           "dti", "bad", "deliquent", "credit_line", "inquiry")]
+loan_bagging$bad <- as.factor(loan_bagging$bad)
+loan_bagging$deliquent <- as.factor(loan_bagging$deliquent)
+loan_bagging$inquiry <- as.factor(loan_bagging$inquiry)
+loan_bagging$term <- as.factor(loan_bagging$term)
+set.seed(1)
+train_bagging <- createDataPartition(loan_bagging$bad, p = .7, list = FALSE)
+training_bagging <- loan_bagging[train_bagging,]
+validation_bagging <- loan_bagging[-train_bagging,]
+rm(train_bagging)
+bagging <- randomForest(bad ~ ., data = training_bagging, mtry = 17, ntree = 50, importance = T)
+predict_bagging <- predict(bagging, newdata = validation_bagging, type = "prob")
+predict_bagging <- predict_bagging[,"1"]
+## Predicton at 20% cutoff
+pred_class_20 <- ifelse(predict_bagging > 0.2, 1, 0)
+pred_class_20 <- factor(pred_class_20, levels = c(0, 1))
+validation_bagging$bad <- factor(validation_bagging$bad, levels = c(0, 1))
+confusionMatrix(pred_class_20, validation_bagging$bad, positive = "1", dnn = c("Prediction", "Actual"))
+## Predicton at 25% cutoff
+pred_class_25 <- ifelse(predict_bagging > 0.25, 1, 0)
+pred_class_25 <- factor(pred_class_25, levels = c(0, 1))
+confusionMatrix(pred_class_25, validation_bagging$bad, positive = "1", dnn = c("Prediction", "Actual"))
+## Predicton at 30% cutoff
+pred_class_30 <- ifelse(predict_bagging > 0.30, 1, 0)
+pred_class_30 <- factor(pred_class_30, levels = c(0, 1))
+confusionMatrix(pred_class_30, validation_bagging$bad, positive = "1", dnn = c("Prediction", "Actual"))
+pred_bagging <- prediction(predict_bagging, validation_bagging$bad)
+perf_bagging <- performance(pred_bagging, "tpr", "fpr")
+plot(perf_bagging,col="blue")
+#points(c(0,1),c(0,1),"l")
+perf_bagging <- performance(pred_bagging, "auc")
+auc_bagging <- round(perf_bagging@y.values[[1]],5)
+print(paste("Area Under Curve for Bagging tree is : ", auc_bagging ))
+```
+
+
+## Random Forest
+
+```{r, echo=FALSE ,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+library(randomForest)
+loan_rf <- loan
+loan_rf$bad <- as.factor(loan_rf$bad)
+loan_rf$deliquent <- as.factor(loan_rf$deliquent)
+loan_rf$inquiry <- as.factor(loan_rf$inquiry)
+loan_rf$term <- as.factor(loan_rf$term)
+set.seed(1)
+train_rf <- createDataPartition(loan_rf$bad, p = .7, list = FALSE)
+training_rf <- loan_rf[train_rf,]
+validation_rf <- loan_rf[-train_rf,]
+rm(train_rf)
+rf <- randomForest(bad ~ ., data = training_rf, mtry = 5, ntree = 50, importance = T)
+predict_rf <- predict(rf, newdata = validation_rf, type = "prob")
+predict_rf <- predict_rf[,"1"]
+pred_rf <- prediction(predict_rf, validation_rf$bad)
+perf_rf <- performance(pred_rf, "tpr", "fpr")
+plot(perf_rf,col="blue")
+#points(c(0,1),c(0,1),"l")
+perf_rf <- performance(pred_rf, "auc")
+auc_rf <- round(perf_rf@y.values[[1]],5)
+print(paste("Area Under Curve for Random Forest is : ", auc_rf))
+```
+
+
+## Boosting
+```{r, echo=FALSE ,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+library(gbm)
+loan_boosting <- loan
+loan_boosting$bad <- as.factor(loan_boosting$bad)
+loan_boosting$deliquent <- as.factor(loan_boosting$deliquent)
+loan_boosting$inquiry <- as.factor(loan_boosting$inquiry)
+loan_boosting$term <- as.factor(loan_boosting$term)
+set.seed(1)
+train_boosting <- createDataPartition(loan_boosting$bad, p = .7, list = FALSE)
+training_boosting <- loan_boosting[train_boosting,]
+validation_boosting <- loan_boosting[-train_boosting,]
+rm(train_boosting)
+training_boosting$bad <- as.character(training_boosting$bad)
+boosting <- gbm(bad ~ ., data = training_boosting, distribution = "bernoulli", n.trees = 1000, interaction.depth = 2, shrinkage = .1)
+summary(boosting)
+predict_boosting <- predict(boosting, validation_boosting, n.trees = 100, type = "response")
+pred_boosting <- prediction(predict_boosting, validation_boosting$bad)
+perf_boosting<- performance(pred_boosting, "tpr", "fpr")
+plot(perf_boosting, col="blue")
+#points(c(0,1),c(0,1),"l")
+perf_boosting<- performance(pred_boosting, "auc")
+auc_boosting <- round(perf_boosting@y.values[[1]],5)
+print(paste("Area Under Curve for Boosting is : ", auc_boosting))
+```
+
+
+## Logistic Regression
+
+```{r, echo=FALSE ,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+loan_glm <- loan
+loan_glm$bad <- as.factor(loan_glm$bad)
+loan_glm$deliquent <- as.factor(loan_glm$deliquent)
+loan_glm$inquiry <- as.factor(loan_glm$inquiry)
+loan_glm$term <- as.factor(loan_glm$term)
+set.seed(1)
+train_glm <- createDataPartition(loan_glm$bad, p = .7, list = FALSE)
+training_glm <- loan_glm[train_glm,]
+validation_glm <- loan_glm[-train_glm,]
+rm(train_glm)
+logistic <- glm(formula = bad~.,family = binomial,data = training_glm )
+predict_glm <- predict(logistic, newdata = validation_glm, type = "response")
+pred_glm <- prediction(predict_glm, validation_glm$bad)
+perf_glm <- performance(pred_glm, "tpr", "fpr")
+plot(perf_glm,col="blue")
+#points(c(0,1),c(0,1),"l")
+perf_glm <- performance(pred_glm, "auc")
+auc_glm <- round(perf_glm@y.values[[1]],5)
+print(paste("Area Under Curve for Random Forest is : ", auc_glm))
+
+#library(boot)
+#logistic <- glm(formula = bad~.,family = binomial,data = loan_glm)
+#cv.error <- cv.glm(loan_glm, logistic,K = 10)
+#cv.error$delta
+```
+
+
+## LASSO
+
+```{r, echo=FALSE ,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+library(glmnet)
+loan_lasso <- loan
+loan_lasso$bad <- as.factor(loan_lasso$bad)
+loan_lasso$deliquent <- as.factor(loan_lasso$deliquent)
+loan_lasso$inquiry <- as.factor(loan_lasso$inquiry)
+loan_lasso$term <- as.factor(loan_lasso$term)
+set.seed(1)
+train_lasso <- createDataPartition(loan_lasso$bad, p = .7, list = FALSE)
+training_lasso <- loan_lasso[train_lasso,]
+validation_lasso <- loan_lasso[-train_lasso,]
+
+x_train <- model.matrix(bad~., training_lasso)[,-18]
+y_train <- training_lasso$bad
+x_test <- model.matrix(bad~., validation_lasso)[,-18]
+y_test <- validation_lasso$bad
+
+lasso <- glmnet(x_train,y_train, family = "binomial", alpha = 1)
+#plot(loan.lo, xvar="lambda")
+lasso.pred <- predict(lasso, s = min(lasso$lambda), newx=x_test, type = "response")
+pred_lasso <- prediction(lasso.pred, y_test)
+perf_lasso <- performance(pred_lasso, "tpr", "fpr")
+plot(perf_lasso,col="blue")
+#points(c(0,1),c(0,1),"l")
+perf_lasso <- performance(pred_lasso, "auc")
+auc_lasso <- round(perf_lasso@y.values[[1]],5)
+print(paste("Area Under Curve for LASSO is : ", auc_lasso))
+```
+
+
+## Naive Bayes
+
+```{r, echo=FALSE ,message=FALSE, warning=FALSE, fig.height=6, fig.width=9}
+library(e1071)
+loan_naive <- loan
+loan_naive$bad <- as.factor(loan_naive$bad)
+loan_naive$deliquent <- as.factor(loan_naive$deliquent)
+loan_naive$inquiry <- as.factor(loan_naive$inquiry)
+loan_naive$term <- as.factor(loan_naive$term)
+
+loan_amnt_bin_func <- function(x){
+  if(x <= 5000){
+    return("Below 5K")
+  }
+  else if (x > 5000 & x <= 10000 ){
+    return ("5K - 10K")
+  }
+  else if (x > 10000 & x <= 15000){
+    return ("10K - 15K")
+  }
+  else if (x > 15000 & x <= 20000){
+    return ("15K - 20K")
+  }
+  else if (x > 20000 & x <= 25000){
+    return ("20K - 25K")
+  }
+  else if (x > 25000 & x <= 30000){
+    return ("25K - 30K")
+  }
+  else{
+    return("Above 30K")
+  }
+}
+loan_naive$amnt_bin <- sapply(loan_naive$loan_amnt, loan_amnt_bin_func)
+int_rate_bin_func <- function(x){
+  if(x <= 5){
+    return("Below 5")
+  }
+  else if (x > 5 & x <= 10 ){
+    return ("5 - 10")
+  }
+  else if (x > 10 & x <= 15){
+    return ("10 - 15")
+  }
+  else if (x > 15 & x <= 20){
+    return ("15 - 20")
+  }
+  else if (x > 20 & x <= 25){
+    return ("20 - 25")
+  }
+  else{
+    return("25-30")
+  }
+}
+loan_naive$int_rate_bin <- sapply(loan_naive$int_rate, int_rate_bin_func)
+
+annual_inc_func <- function(x){
+  if(x <= 10000){
+    return("Below 10k")
+  }
+  else if (x > 10000 & x <= 30000 ){
+    return ("10k - 30k")
+  }
+  else if (x > 30000 & x <= 60000){
+    return ("30k - 60k")
+  }
+  else if (x > 60000 & x <= 90000){
+    return ("60k - 90k")
+  }
+  else if (x > 90000 & x <= 12000){
+    return ("90k - 120k")
+  }
+  else{
+    return(">120k")
+  }
+}
+loan_naive$annual_inc_bin <- sapply(loan_naive$annual_inc, annual_inc_func)
+
+dti_func <- function(x){
+  if(x <= 10){
+    return("Below 10")
+  }
+  else if (x > 10 & x <= 15 ){
+    return ("10-15")
+  }
+  else if (x > 15 & x <= 20){
+    return ("15-20")
+  }
+  else if (x > 20 & x <= 25){
+    return ("20 - 25")
+  }
+  else if (x > 25 & x <= 30){
+    return ("25 - 30")
+  }
+  else if (x > 30 & x <= 35){
+    return ("30 - 35")
+  }
+  else{
+    return(">35")
+  }
+}
+loan_naive$dti_bin <- sapply(loan_naive$dti, dti_func)
+
+open_acc_func <- function(x){
+  if(x <= 5){
+    return("Below 5")
+  }
+  else if (x > 5 & x <= 10 ){
+    return ("5-10")
+  }
+  else if (x > 10 & x <= 15){
+    return ("10-15")
+  }
+  else if (x > 15 & x <= 20){
+    return ("15 - 20")
+  }
+  else if (x > 20 & x <= 25){
+    return ("20 - 25")
+  }
+  else if (x > 25 & x <= 30){
+    return ("25-30")
+  }
+  else{
+    return(">30")
+  }
+}
+loan_naive$open_acc_bin <- sapply(loan_naive$open_acc, open_acc_func)
+
+revol_bal_func <- function(x){
+  if(x <= 5000){
+    return("Below 5k")
+  }
+  else if (x > 5000 & x <= 10000 ){
+    return ("5k-10k")
+  }
+  else if (x > 10000 & x <= 15000){
+    return ("10k-15k")
+  }
+  else if (x > 15000 & x <= 35000){
+    return ("15k-35k")
+  }
+  else if (x > 35000 & x <= 55000){
+    return ("35k-55k")
+  }
+  else if (x > 55000 & x <= 75000){
+    return ("55k-75k")
+  }
+  else{
+    return(">75k")
+  }
+}
+loan_naive$revol_bal_bin <- sapply(loan_naive$revol_bal, revol_bal_func)
+revol_util_func <- function(x){
+   if(x <= 20){
+     return("Below 20")
+   }
+   else if (x > 20 & x <= 40 ){
+     return ("20-40")
+   }
+   else if (x > 40 & x <= 60){
+     return ("40-60")
+   }
+   else if (x > 60 & x <= 80){
+     return ("60-80")
+   }
+   else{
+     return(">80")
+   }
+ }
+loan_naive$revol_util_bin <- sapply(loan_naive$revol_util, revol_util_func)
+ 
+total_acc_func <- function(x){
+   if(x <= 10){
+     return("Below 10")
+   }
+   else if (x > 10 & x <= 20 ){
+     return ("10-20")
+   }
+   else if (x > 20 & x <= 30){
+     return ("20-30")
+   }
+   else if (x > 30 & x <= 40){
+     return ("30-40")
+   }
+   else if (x > 40 & x <= 50 ){
+     return ("40-50")
+   }
+   else if (x > 50 & x <= 60){
+     return ("50-60")
+   }
+   else if (x > 60 & x <= 70){
+     return ("60-70")
+   }
+   else{
+     return(">70")
+   }
+ }
+ loan_naive$total_acc_bin <- sapply(loan_naive$total_acc, total_acc_func)
+ 
+ credit_line_func <- function(x){
+   if(x <= 5){
+     return("Below 5")
+   }
+   else if (x > 5 & x <= 15 ){
+     return ("5-15")
+   }
+   else if (x > 15 & x <= 30){
+     return ("15-30")
+   }
+   else if (x > 30 & x <= 45){
+     return ("30-45")
+   }
+   else if (x > 45 & x <= 60 ){
+     return ("45-60")
+   }
+   else{
+     return(">60")
+   }
+ }
+ loan_naive$credit_line_bin <- sapply(loan_naive$credit_line, credit_line_func)
+ loan_naive$loan_amnt <- NULL
+ loan_naive$int_rate <- NULL
+ loan_naive$annual_inc <- NULL
+ loan_naive$dti <- NULL
+ loan_naive$open_acc <- NULL
+ loan_naive$revol_bal <- NULL
+ loan_naive$revol_util <- NULL
+ loan_naive$total_acc <- NULL
+ loan_naive$credit_line <- NULL
+ loan_naive$amnt_bin<- as.factor(loan_naive$amnt_bin)
+ loan_naive$int_rate_bin<- as.factor(loan_naive$int_rate_bin)
+ loan_naive$annual_inc_bin<- as.factor(loan_naive$annual_inc_bin)
+ loan_naive$dti_bin <- as.factor(loan_naive$dti_bin)
+ loan_naive$open_acc_bin<- as.factor(loan_naive$open_acc_bin)
+ loan_naive$revol_bal_bin<- as.factor(loan_naive$revol_bal_bin)
+ loan_naive$revol_util_bin<- as.factor(loan_naive$revol_util_bin)
+ loan_naive$total_acc_bin <- as.factor(loan_naive$total_acc_bin)
+ loan_naive$credit_line_bin <- as.factor(loan_naive$credit_line_bin)
+
+set.seed(1)
+train_naive <- createDataPartition(loan_naive$bad, p = .7, list = FALSE)
+training_naive <- loan_naive[train_naive,]
+validation_naive <- loan_naive[-train_naive,]
+rm(train_naive)
+
+naive <- naiveBayes(bad ~.,data=training_naive)
+predict_naive <- predict(naive, newdata = validation_naive[,-9], type = "raw") 
+predict_naive <- predict_naive[,2]
+pred_naive <- prediction(predict_naive, validation_naive$bad)
+perf_naive <- performance(pred_naive, "tpr", "fpr")
+plot(perf_naive,col="blue")
+#points(c(0,1),c(0,1),"l")
+perf_naive <- performance(pred_naive, "auc")
+auc_naive <- round(perf_naive@y.values[[1]],5)
+print(paste("Area Under Curve for Naive Bayes is : ", auc_naive))
+
+```
+
+
+
+
+
+
+
+
+
